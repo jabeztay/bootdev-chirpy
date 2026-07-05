@@ -9,22 +9,11 @@ import (
 	"context"
 )
 
-const createUser = `-- name: CreateUser :one
-INSERT INTO users (id, created_at, updated_at, email)
-VALUES (
-           gen_random_uuid(), NOW(), NOW(), $1
-       )
-    RETURNING id, created_at, updated_at, email
+const resetUsers = `-- name: ResetUsers :exec
+TRUNCATE TABLE users CASCADE
 `
 
-func (q *Queries) CreateUser(ctx context.Context, email string) (User, error) {
-	row := q.db.QueryRowContext(ctx, createUser, email)
-	var i User
-	err := row.Scan(
-		&i.ID,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.Email,
-	)
-	return i, err
+func (q *Queries) ResetUsers(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, resetUsers)
+	return err
 }

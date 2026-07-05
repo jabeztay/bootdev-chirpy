@@ -1,9 +1,10 @@
 -- +goose up
-CREATE TABLE users(
+CREATE TABLE chirps(
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     created_at TIMESTAMP NOT NULL,
     updated_at TIMESTAMP NOT NULL,
-    email TEXT UNIQUE NOT NULL
+    body TEXT NOT NULL,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE
 );
 
 -- +goose down

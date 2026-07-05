@@ -5,6 +5,9 @@ import (
 	"fmt"
 	"net/http"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/jabeztay/bootdev-chirpy/internal/database"
 )
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {
@@ -32,9 +35,10 @@ func (cfg *apiConfig) resetHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(http.StatusText(http.StatusOK)))
 }
 
-func validateChirpHandler(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) chirpHandler(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
-		Body string `json:"body"`
+		Body   string `json:"body"`
+		UserId string `json:"user_id"`
 	}
 
 	decoder := json.NewDecoder(r.Body)
@@ -50,13 +54,33 @@ func validateChirpHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	userId, err := uuid.Parse(params.UserId)
+	if err != nil {
+		respondWithError(w, 400, "Invalid request")
+		return
+	}
+
+	chirp, err := cfg.dbQueries.CreateChirp(r.Context(), database.CreateChirpParams{Body: params.Body, UserID: userId})
+	if err != nil {
+		respondWithError(w, 500, "Something went wrong")
+		return
+	}
+
 	type returnVals struct {
-		CleanedBody string `json:"cleaned_body"`
+		Id        string `json:"id"`
+		CreatedAt string `json:"created_at"`
+		UpdatedAt string `json:"updated_at"`
+		Body      string `json:"body"`
+		UserId    string `json:"user_id"`
 	}
 	respBody := returnVals{
-		CleanedBody: removeProfane(params.Body),
+		Id:        chirp.ID.String(),
+		CreatedAt: chirp.CreatedAt.Format(time.RFC3339),
+		UpdatedAt: chirp.UpdatedAt.Format(time.RFC3339),
+		Body:      chirp.Body,
+		UserId:    chirp.UserID.String(),
 	}
-	respondWithJson(w, 200, respBody)
+	respondWithJson(w, 201, respBody)
 	return
 }
 
@@ -96,4 +120,66 @@ func (cfg *apiConfig) postUsersHandler(w http.ResponseWriter, r *http.Request) {
 
 	respondWithJson(w, 201, respBody)
 	return
+}
+
+func (cfg *apiConfig) getChirpsHandler(w http.ResponseWriter, r *http.Request) {
+	chirps, err := cfg.dbQueries.GetChirps(r.Context())
+	if err != nil {
+		respondWithError(w, 500, "Something went wrong fetching chirps")
+		return
+	}
+
+	type returnVals struct {
+		Id        string `json:"id"`
+		CreatedAt string `json:"created_at"`
+		UpdatedAt string `json:"updated_at"`
+		Body      string `json:"body"`
+		UserId    string `json:"user_id"`
+	}
+
+	respBody := make([]returnVals, 0, len(chirps))
+
+	for _, chirp := range chirps {
+		chirpParsed := returnVals{
+			Id:        chirp.ID.String(),
+			CreatedAt: chirp.CreatedAt.Format(time.RFC3339),
+			UpdatedAt: chirp.UpdatedAt.Format(time.RFC3339),
+			Body:      chirp.Body,
+			UserId:    chirp.UserID.String(),
+		}
+		respBody = append(respBody, chirpParsed)
+	}
+
+	respondWithJson(w, 200, respBody)
+}
+
+func (cfg *apiConfig) getChirpHandler(w http.ResponseWriter, r *http.Request) {
+	chirpId, err := uuid.Parse(r.PathValue("chirpID"))
+	if err != nil {
+		respondWithError(w, 400, "Invalid request")
+		return
+	}
+	chirp, err := cfg.dbQueries.GetChirpById(r.Context(), chirpId)
+	if err != nil {
+		respondWithError(w, 404, "Chirp not found")
+		return
+	}
+
+	type returnVals struct {
+		Id        string `json:"id"`
+		CreatedAt string `json:"created_at"`
+		UpdatedAt string `json:"updated_at"`
+		Body      string `json:"body"`
+		UserId    string `json:"user_id"`
+	}
+
+	respBody := returnVals{
+		Id:        chirp.ID.String(),
+		CreatedAt: chirp.CreatedAt.Format(time.RFC3339),
+		UpdatedAt: chirp.UpdatedAt.Format(time.RFC3339),
+		Body:      chirp.Body,
+		UserId:    chirp.UserID.String(),
+	}
+
+	respondWithJson(w, 200, respBody)
 }
