@@ -8,4 +8,4 @@ CREATE TABLE chirps(
 );
 
 -- +goose down
-DROP TABLE IF EXISTS users;
+DROP TABLE IF EXISTS chirps;
