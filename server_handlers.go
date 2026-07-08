@@ -29,7 +29,13 @@ func (cfg *apiConfig) resetHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cfg.dbQueries.ResetUsers(r.Context())
+	err := cfg.dbQueries.ResetUsers(r.Context())
+
+	if err != nil {
+		respondWithError(w, 500, "An error occurred while resetting")
+		return
+	}
+
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	cfg.fileserverHits.Store(0)
@@ -38,13 +44,25 @@ func (cfg *apiConfig) resetHandler(w http.ResponseWriter, r *http.Request) {
 
 func (cfg *apiConfig) chirpHandler(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
-		Body   string `json:"body"`
-		UserId string `json:"user_id"`
+		Body string `json:"body"`
+	}
+
+	token, err := internal.GetBearerToken(r.Header)
+
+	if err != nil {
+		respondWithError(w, 401, "unauthorized")
+		return
+	}
+
+	userId, err := internal.ValidateJWT(token, cfg.JWTSecret)
+	if err != nil {
+		respondWithError(w, 401, "unauthorized")
+		return
 	}
 
 	decoder := json.NewDecoder(r.Body)
 	params := parameters{}
-	err := decoder.Decode(&params)
+	err = decoder.Decode(&params)
 	if err != nil {
 		respondWithError(w, 400, "Invalid request")
 		return
@@ -52,12 +70,6 @@ func (cfg *apiConfig) chirpHandler(w http.ResponseWriter, r *http.Request) {
 
 	if len(params.Body) > 140 {
 		respondWithError(w, 400, "Chirp is too long")
-		return
-	}
-
-	userId, err := uuid.Parse(params.UserId)
-	if err != nil {
-		respondWithError(w, 400, "Invalid request")
 		return
 	}
 
@@ -195,8 +207,9 @@ func (cfg *apiConfig) getChirpHandler(w http.ResponseWriter, r *http.Request) {
 
 func (cfg *apiConfig) loginUserHandler(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
+		Email            string `json:"email"`
+		Password         string `json:"password"`
+		ExpiresInSeconds *int   `json:"expires_in_seconds,omitempty"`
 	}
 
 	decoder := json.NewDecoder(r.Body)
@@ -221,11 +234,27 @@ func (cfg *apiConfig) loginUserHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var expiresInSeconds int
+
+	if params.ExpiresInSeconds != nil {
+		expiresInSeconds = max(*params.ExpiresInSeconds, 3600)
+	} else {
+		expiresInSeconds = 3600
+	}
+
+	token, err := internal.MakeJWT(user.ID, cfg.JWTSecret, time.Duration(expiresInSeconds)*time.Second)
+
+	if err != nil {
+		respondWithError(w, 500, "Something went wrong creating token")
+		return
+	}
+
 	type returnVals struct {
 		Id        string `json:"id"`
 		CreatedAt string `json:"created_at"`
 		UpdatedAt string `json:"updated_at"`
 		Email     string `json:"email"`
+		Token     string `json:"token"`
 	}
 
 	respBody := returnVals{
@@ -233,6 +262,7 @@ func (cfg *apiConfig) loginUserHandler(w http.ResponseWriter, r *http.Request) {
 		CreatedAt: user.CreatedAt.Format(time.RFC3339),
 		UpdatedAt: user.UpdatedAt.Format(time.RFC3339),
 		Email:     user.Email,
+		Token:     token,
 	}
 
 	respondWithJson(w, 200, respBody)

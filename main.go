@@ -19,6 +19,7 @@ type apiConfig struct {
 	fileserverHits atomic.Int32
 	dbQueries      *database.Queries
 	platform       string
+	JWTSecret      string
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
@@ -39,6 +40,7 @@ func main() {
 	cfg := &apiConfig{}
 	cfg.dbQueries = database.New(db)
 	cfg.platform = os.Getenv("PLATFORM")
+	cfg.JWTSecret = os.Getenv("JWT_SECRET")
 	wrappedAppHandler := cfg.middlewareMetricsInc(appHandler)
 	mux.Handle("/app/", wrappedAppHandler)
 	mux.HandleFunc("GET /api/healthz", healthHandler)

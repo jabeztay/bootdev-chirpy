@@ -3,6 +3,9 @@ package internal
 import (
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 func TestHashPassword(t *testing.T) {
@@ -66,5 +69,73 @@ func TestCheckPasswordHash_MalformedHash(t *testing.T) {
 	_, err := CheckPasswordHash("password", "not-a-valid-hash")
 	if err == nil {
 		t.Error("expected error for malformed hash string")
+	}
+}
+
+func TestValidateJWT(t *testing.T) {
+	userID := uuid.New()
+	secret := "correct-secret"
+
+	// A valid, non-expired token we can reuse.
+	validToken, err := MakeJWT(userID, secret, time.Hour)
+	if err != nil {
+		t.Fatalf("MakeJWT failed during setup: %v", err)
+	}
+
+	// An already-expired token: negative duration puts exp in the past.
+	expiredToken, err := MakeJWT(userID, secret, -time.Hour)
+	if err != nil {
+		t.Fatalf("MakeJWT failed during setup: %v", err)
+	}
+
+	tests := []struct {
+		name        string
+		tokenString string
+		tokenSecret string
+		wantUserID  uuid.UUID
+		wantErr     bool
+	}{
+		{
+			name:        "valid token",
+			tokenString: validToken,
+			tokenSecret: secret,
+			wantUserID:  userID,
+			wantErr:     false,
+		},
+		{
+			name:        "expired token",
+			tokenString: expiredToken,
+			tokenSecret: secret,
+			wantUserID:  uuid.Nil,
+			wantErr:     true,
+		},
+		{
+			name:        "wrong secret",
+			tokenString: validToken,
+			tokenSecret: "wrong-secret",
+			wantUserID:  uuid.Nil,
+			wantErr:     true,
+		},
+		{
+			name:        "malformed token string",
+			tokenString: "not.a.jwt",
+			tokenSecret: secret,
+			wantUserID:  uuid.Nil,
+			wantErr:     true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotUserID, err := ValidateJWT(tt.tokenString, tt.tokenSecret)
+
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ValidateJWT() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if gotUserID != tt.wantUserID {
+				t.Errorf("ValidateJWT() userID = %v, want %v", gotUserID, tt.wantUserID)
+			}
+		})
 	}
 }
