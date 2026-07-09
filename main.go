@@ -51,6 +51,8 @@ func main() {
 	mux.HandleFunc("GET /api/chirps/{chirpID}", cfg.getChirpHandler)
 	mux.HandleFunc("POST /api/users", cfg.postUsersHandler)
 	mux.HandleFunc("POST /api/login", cfg.loginUserHandler)
+	mux.HandleFunc("POST /api/refresh", cfg.refreshTokenHandler)
+	mux.HandleFunc("POST /api/revoke", cfg.revokeRefreshTokenHandler)
 	s := &http.Server{Addr: ":" + port, Handler: mux}
 
 	log.Printf("Serving on port %s\n", port)
