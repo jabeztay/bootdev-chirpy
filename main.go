@@ -20,6 +20,7 @@ type apiConfig struct {
 	dbQueries      *database.Queries
 	platform       string
 	JWTSecret      string
+	polkaKey       string
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
@@ -41,6 +42,7 @@ func main() {
 	cfg.dbQueries = database.New(db)
 	cfg.platform = os.Getenv("PLATFORM")
 	cfg.JWTSecret = os.Getenv("JWT_SECRET")
+	cfg.polkaKey = os.Getenv("POLKA_KEY")
 	wrappedAppHandler := cfg.middlewareMetricsInc(appHandler)
 	mux.Handle("/app/", wrappedAppHandler)
 	mux.HandleFunc("GET /api/healthz", healthHandler)
@@ -55,6 +57,7 @@ func main() {
 	mux.HandleFunc("POST /api/login", cfg.loginUserHandler)
 	mux.HandleFunc("POST /api/refresh", cfg.refreshTokenHandler)
 	mux.HandleFunc("POST /api/revoke", cfg.revokeRefreshTokenHandler)
+	mux.HandleFunc("POST /api/polka/webhooks", cfg.polkaWebhookHandler)
 	s := &http.Server{Addr: ":" + port, Handler: mux}
 
 	log.Printf("Serving on port %s\n", port)
