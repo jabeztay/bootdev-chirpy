@@ -3,6 +3,8 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -66,15 +68,15 @@ func (cfg *apiConfig) chirpHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *apiConfig) getChirpsHandler(w http.ResponseWriter, r *http.Request) {
-	s := r.URL.Query().Get("author_id")
+	authorId := r.URL.Query().Get("author_id")
 
 	var chirps []database.Chirp
 	var err error
 
-	if s == "" {
+	if authorId == "" {
 		chirps, err = cfg.dbQueries.GetChirps(r.Context())
 	} else {
-		userId, err := uuid.Parse(s)
+		userId, err := uuid.Parse(authorId)
 		if err != nil {
 			respondWithError(w, http.StatusBadRequest, "invalid userid")
 		}
@@ -94,8 +96,13 @@ func (cfg *apiConfig) getChirpsHandler(w http.ResponseWriter, r *http.Request) {
 		UserId    string `json:"user_id"`
 	}
 
-	respBody := make([]returnVals, 0, len(chirps))
+	sort := r.URL.Query().Get("sort")
 
+	if strings.ToLower(sort) == "desc" {
+		slices.Reverse(chirps)
+	}
+
+	respBody := make([]returnVals, 0, len(chirps))
 	for _, chirp := range chirps {
 		chirpParsed := returnVals{
 			Id:        chirp.ID.String(),
